@@ -61,6 +61,11 @@ def create_chunks(state: PipelineState) -> PipelineState:
             )
             chunks.append(chunk)
 
+    # DEMO FAST PATH: limit chunks for quick demonstration without hitting rate limits
+    if len(chunks) > 2:
+        mid = len(chunks) // 2
+        chunks = chunks[mid:mid+2]
+
     logger.info("Created %d chunks from %d pages", len(chunks), len(pages))
 
     return {

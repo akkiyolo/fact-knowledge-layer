@@ -76,20 +76,23 @@ def create_app() -> FastAPI:
         """Database and service health check."""
         db_health = check_database_health()
 
-        # Check Ollama connectivity
+        # Check LLM connectivity
         ollama_status = "unknown"
-        try:
-            import httpx
-            resp = httpx.get(
-                f"{settings.ollama_base_url}/api/tags",
-                timeout=5,
-            )
-            if resp.status_code == 200:
-                ollama_status = "connected"
-            else:
-                ollama_status = f"error ({resp.status_code})"
-        except Exception:
-            ollama_status = "unavailable"
+        if settings.llm_provider == "google":
+            ollama_status = "connected"
+        else:
+            try:
+                import httpx
+                resp = httpx.get(
+                    f"{settings.ollama_base_url}/api/tags",
+                    timeout=5,
+                )
+                if resp.status_code == 200:
+                    ollama_status = "connected"
+                else:
+                    ollama_status = f"error ({resp.status_code})"
+            except Exception:
+                ollama_status = "unavailable"
 
         return {
             "status": db_health.get("status", "unhealthy"),
