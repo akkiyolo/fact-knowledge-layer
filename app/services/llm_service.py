@@ -174,12 +174,14 @@ class GoogleLLMService(LLMService):
         
         import google.generativeai as genai
         genai.configure(api_key=settings.google_api_key)
-        self.model_name = settings.google_model
+        
+        # FORCE gemini-1.5-flash to bypass the 20-request/day limit of 2.5-flash
+        self.model_name = "gemini-1.5-flash"
         
         # Verify basic initialization
         try:
             self.model = genai.GenerativeModel(self.model_name)
-            logger.info("Google LLM Service initialized with model '%s'", self.model_name)
+            logger.info("Google LLM Service initialized with forced model '%s'", self.model_name)
         except Exception as e:
             raise RuntimeError(f"Failed to initialize Google LLM: {type(e).__name__}: {e}")
 
