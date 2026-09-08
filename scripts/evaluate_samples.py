@@ -61,13 +61,14 @@ async def main():
     print(f"Found {len(pdf_files)} PDF files to process.")
     
     async with httpx.AsyncClient() as client:
-        # Upload all sequentially to avoid overwhelming the local LLM
         for pdf_file in pdf_files:
+            print(f"\n==========================================")
+            print(f"Uploading and processing: {pdf_file.name}")
+            print(f"==========================================")
             await upload_pdf(client, pdf_file)
-            # Small delay between uploads
+            # Wait for this document to finish processing before uploading the next
+            await wait_for_processing(client)
             await asyncio.sleep(2)
-            
-        await wait_for_processing(client)
 
 if __name__ == "__main__":
     asyncio.run(main())

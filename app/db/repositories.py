@@ -130,21 +130,18 @@ class ClaimRepository:
 
         # pgvector cosine distance: <=> operator returns distance (0 = identical)
         # similarity = 1 - distance
-        embedding_str = f"[{','.join(str(x) for x in embedding)}]"
-        distance_threshold = 1.0 - similarity_threshold
-
         stmt = (
             select(
                 Claim,
-                (1 - Claim.embedding.cosine_distance(embedding_str)).label("similarity"),
+                (1 - Claim.embedding.cosine_distance(embedding)).label("similarity"),
             )
             .where(Claim.document_id != exclude_document_id)
             .where(Claim.status == "usable")
             .where(Claim.embedding.isnot(None))
             .where(
-                (1 - Claim.embedding.cosine_distance(embedding_str)) >= similarity_threshold
+                (1 - Claim.embedding.cosine_distance(embedding)) >= similarity_threshold
             )
-            .order_by(Claim.embedding.cosine_distance(embedding_str))
+            .order_by(Claim.embedding.cosine_distance(embedding))
             .limit(top_k)
         )
 

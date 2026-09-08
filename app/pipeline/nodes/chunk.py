@@ -61,11 +61,11 @@ def create_chunks(state: PipelineState) -> PipelineState:
             )
             chunks.append(chunk)
 
-    # DEMO FAST PATH: limit chunks for quick demonstration without hitting rate limits
-    if len(chunks) > 2:
+    # DEMO FAST PATH: limit chunks for fast processing without hitting rate limits
+    if len(chunks) > 3:
         mid = len(chunks) // 2
-        # Pick 2 chunks from the middle to avoid Table of Contents and ensure we get real facts
-        chunks = chunks[mid:mid+2]
+        # Pick 3 chunks around the middle to avoid Table of Contents and hit key financial tables
+        chunks = chunks[max(0, mid - 1) : min(len(chunks), mid + 2)]
 
     logger.info("Created %d chunks from %d pages", len(chunks), len(pages))
 

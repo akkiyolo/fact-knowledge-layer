@@ -15,7 +15,8 @@ async def main():
     
     # Let's see what the chunks from the middle look like
     import pymupdf
-    doc = pymupdf.open("pdfs/01-delhivery-prospectus-2022-excerpt.pdf")
+    pdf_path = Path("data/sample/03-delhivery-q4-fy24-earnings-presentation.pdf")
+    doc = pymupdf.open(pdf_path)
     pages = []
     char_start = 0
     for page_num in range(len(doc)):

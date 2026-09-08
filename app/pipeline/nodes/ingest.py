@@ -32,16 +32,24 @@ def ingest_document(state: PipelineState) -> PipelineState:
             doc_repo = DocumentRepository(session)
             existing = doc_repo.find_by_content_hash(content_hash)
             if existing:
-                logger.info("Duplicate document detected: %s (existing: %s)", filename, existing.id)
-                return {
-                    **state,
-                    "content_hash": content_hash,
-                    "is_duplicate": True,
-                    "existing_document_id": existing.id,
-                    "document_id": existing.id,
-                    "status": "duplicate",
-                    "errors": errors,
-                }
+                from app.db.repositories import ClaimRepository
+                claim_repo = ClaimRepository(session)
+                claims = claim_repo.get_by_document(existing.id, limit=1)
+                if len(claims) > 0:
+                    logger.info("Duplicate document detected with %d+ claims: %s (existing: %s)", len(claims), filename, existing.id)
+                    return {
+                        **state,
+                        "content_hash": content_hash,
+                        "is_duplicate": True,
+                        "existing_document_id": existing.id,
+                        "document_id": existing.id,
+                        "status": "duplicate",
+                        "errors": errors,
+                    }
+                else:
+                    logger.info("Document %s previously ingested with 0 claims. Removing stale record to re-ingest.", filename)
+                    session.delete(existing)
+                    session.commit()
         finally:
             session.close()
 

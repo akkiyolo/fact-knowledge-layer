@@ -42,13 +42,22 @@ async def upload_document(
     existing = doc_repo.find_by_content_hash(content_hash)
 
     if existing:
-        return UploadResponse(
-            document_id=existing.id,
-            filename=existing.filename,
-            status="duplicate",
-            message="This document has already been ingested",
-            is_duplicate=True,
-        )
+        # If existing document has 0 claims (failed previously), delete stale record and allow re-ingest
+        from app.db.repositories import ClaimRepository
+        claim_repo = ClaimRepository(db)
+        claims = claim_repo.get_by_document(existing.id, limit=1)
+        if len(claims) == 0:
+            logger.info("Existing document %s has 0 claims. Removing stale record to re-process.", existing.filename)
+            db.delete(existing)
+            db.commit()
+        else:
+            return UploadResponse(
+                document_id=existing.id,
+                filename=existing.filename,
+                status="duplicate",
+                message="This document has already been ingested",
+                is_duplicate=True,
+            )
 
     # Run pipeline in background
     filename = file.filename

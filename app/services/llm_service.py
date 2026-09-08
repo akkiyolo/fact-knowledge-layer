@@ -49,8 +49,13 @@ class LLMService(ABC):
         Parse JSON from LLM output, handling common formatting issues.
         Extracts JSON from markdown code blocks if present.
         """
+        if not text or not text.strip():
+            return {}
+
         # Strip thinking tags (qwen3 outputs these)
         text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
+        # Strip leading conversational labels or commentary
+        text = re.sub(r'^(?:thought\s+|An analysis.*?:)\s*', '', text, flags=re.IGNORECASE | re.DOTALL)
         text = text.strip()
 
         # Try direct parse first
@@ -59,8 +64,8 @@ class LLMService(ABC):
         except json.JSONDecodeError:
             pass
 
-        # Try extracting from markdown code blocks
-        json_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', text, re.DOTALL)
+        # Try extracting from markdown code blocks (including unclosed ones)
+        json_match = re.search(r'```(?:json)?\s*\n?(.*?)(?:\n?```|$)', text, re.DOTALL)
         if json_match:
             try:
                 return json.loads(json_match.group(1).strip())
@@ -175,19 +180,19 @@ class GoogleLLMService(LLMService):
         import google.generativeai as genai
         genai.configure(api_key=settings.google_api_key)
         
-        # FORCE gemini-3.5-flash to bypass the 20-request/day limit of 2.5-flash, and 1.5-flash which threw a 404
-        self.model_name = "gemini-3.5-flash"
+        # Use gemini-3.5-flash-lite: has full quota, high throughput, and supports native JSON output
+        self.model_name = "gemini-3.5-flash-lite"
         
         # Verify basic initialization
         try:
             self.model = genai.GenerativeModel(self.model_name)
-            logger.info("Google LLM Service initialized with forced model '%s'", self.model_name)
+            logger.info("Google LLM Service initialized with model '%s'", self.model_name)
         except Exception as e:
             raise RuntimeError(f"Failed to initialize Google LLM: {type(e).__name__}: {e}")
 
     @retry(
-        wait=wait_exponential(multiplier=2, min=10, max=60),
-        stop=stop_after_attempt(10),
+        wait=wait_exponential(multiplier=2, min=5, max=30),
+        stop=stop_after_attempt(5),
         reraise=True,
     )
     def generate(
@@ -195,19 +200,24 @@ class GoogleLLMService(LLMService):
         prompt: str,
         system_prompt: Optional[str] = None,
         temperature: float = 0.1,
-        max_tokens: int = 4096,
+        max_tokens: int = 8192,
+        response_mime_type: Optional[str] = None,
     ) -> str:
         """Call Google Gemini generate API with exponential backoff for rate limits."""
         try:
             import google.generativeai as genai
             
+            gen_config = {
+                "temperature": temperature,
+                "max_output_tokens": max_tokens,
+            }
+            if response_mime_type:
+                gen_config["response_mime_type"] = response_mime_type
+
             model = genai.GenerativeModel(
                 self.model_name,
                 system_instruction=system_prompt if system_prompt else None,
-                generation_config=genai.types.GenerationConfig(
-                    temperature=temperature,
-                    max_output_tokens=max_tokens,
-                ),
+                generation_config=genai.types.GenerationConfig(**gen_config),
             )
             
             response = model.generate_content(prompt)
@@ -217,6 +227,23 @@ class GoogleLLMService(LLMService):
                 logger.warning("Google API rate limit hit. Retrying...")
                 raise  # Let tenacity handle it
             raise RuntimeError(f"Google generate failed: {type(e).__name__}: {e}")
+
+    def generate_json(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.1,
+        max_tokens: int = 8192,
+    ) -> dict:
+        """Generate and parse a JSON response using Gemini native JSON mode."""
+        raw = self.generate(
+            prompt,
+            system_prompt=system_prompt,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_mime_type="application/json",
+        )
+        return self._parse_json(raw)
 
 
 # ── Singleton ────────────────────────────────────────────────

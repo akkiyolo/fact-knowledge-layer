@@ -1,0 +1,26 @@
+thought
+
+```json
+{
+  "claims": [
+    {
+      "entity": {
+        "text": "Working capital position",
+        "type": "metric"
+      },
+      "attribute_raw": "YoY trend",
+      "value": {
+        "type": "string",
+        "value": "improving"
+      },
+      "unit": null,
+      "time_scope": {
+        "text": "YoY",
+        "start": null,
+        "end": null
+      },
+      "scope": null,
+      "qualifiers": [],
+      "evidence": {
+        "text": "Working capital position improving YoY",
+        "page": 16,

@@ -53,4 +53,4 @@ OUTPUT FORMAT (strict JSON):
   ]
 }}
 
-Extract all verifiable atomic claims from the text. Return ONLY valid JSON.
+Extract at most 10 of the most significant, high-value atomic claims (prioritizing key annual/quarterly financial metrics, revenue, EBITDA, margins, totals, volumes, dates, and definitive corporate statements). Return ONLY valid JSON.

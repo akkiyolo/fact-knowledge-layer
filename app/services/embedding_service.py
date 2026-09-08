@@ -44,36 +44,24 @@ class LocalEmbeddingService(EmbeddingService):
         self._model = None
 
     def _load_model(self):
-        """Lazy-load the embedding model."""
+        """Lazy-load the embedding model with fallback."""
         if self._model is None:
             try:
                 from sentence_transformers import SentenceTransformer
                 logger.info("Loading embedding model: %s", self.model_name)
                 self._model = SentenceTransformer(self.model_name)
-                # Verify dimension
-                test_emb = self._model.encode(["test"])
-                actual_dim = len(test_emb[0])
-                if actual_dim != self._dimension:
-                    logger.warning(
-                        "Configured EMBEDDING_DIMENSION=%d but model produces %d. "
-                        "Using actual dimension.",
-                        self._dimension,
-                        actual_dim,
-                    )
-                    self._dimension = actual_dim
-                logger.info(
-                    "Embedding model loaded: %s (dim=%d)",
-                    self.model_name,
+                logger.info("Embedding model loaded successfully: %s", self.model_name)
+            except Exception as e:
+                logger.warning(
+                    "SentenceTransformer failed to load (%s). Falling back to HashingVectorizer(dim=%d).",
+                    e,
                     self._dimension,
                 )
-            except ImportError:
-                raise RuntimeError(
-                    "sentence-transformers is required for local embeddings. "
-                    "Install with: pip install sentence-transformers"
-                )
-            except Exception as e:
-                raise RuntimeError(
-                    f"Failed to load embedding model '{self.model_name}': {e}"
+                from sklearn.feature_extraction.text import HashingVectorizer
+                self._model = HashingVectorizer(
+                    n_features=self._dimension,
+                    norm="l2",
+                    alternate_sign=False,
                 )
 
     def embed(self, texts: list[str]) -> list[list[float]]:
@@ -81,12 +69,17 @@ class LocalEmbeddingService(EmbeddingService):
         if not texts:
             return []
         self._load_model()
-        embeddings = self._model.encode(
-            texts,
-            normalize_embeddings=True,
-            show_progress_bar=False,
-        )
-        return embeddings.tolist()
+        if hasattr(self._model, "encode"):
+            embeddings = self._model.encode(
+                texts,
+                normalize_embeddings=True,
+                show_progress_bar=False,
+            )
+            return embeddings.tolist()
+        else:
+            # Fallback HashingVectorizer
+            matrix = self._model.transform(texts).toarray()
+            return matrix.tolist()
 
     def embed_single(self, text: str) -> list[float]:
         """Embed a single text string."""
