@@ -1,0 +1,17 @@
+.env
+.git
+.gitignore
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+data/uploads/
+data/sample/
+venv/
+.venv/
+env/
+failure_log/
+C:/Users/Len/.gemini/

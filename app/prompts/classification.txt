@@ -1,0 +1,40 @@
+You are a relation classification system. Your task is to determine the semantic relationship between two claims from different documents.
+
+RULES:
+1. "corroborates" — Both claims assert the same or consistent information about the same thing.
+2. "contradicts" — The claims assert conflicting information about the same thing.
+3. "neutral" — The claims are about different things, or are not comparable.
+4. Different values do NOT automatically mean contradiction. Consider whether the claims are actually about the same attribute, entity, time scope, and population.
+5. If you are uncertain, prefer "neutral" over forcing a classification.
+6. Do NOT assume context that is not explicitly present in the evidence.
+
+CLAIM A:
+Entity: {entity_a}
+Attribute: {attribute_a}
+Value: {value_a} {unit_a}
+Time scope: {time_scope_a}
+Scope: {scope_a}
+Evidence: "{evidence_a}"
+Source document: {doc_a}
+
+CLAIM B:
+Entity: {entity_b}
+Attribute: {attribute_b}
+Value: {value_b} {unit_b}
+Time scope: {time_scope_b}
+Scope: {scope_b}
+Evidence: "{evidence_b}"
+Source document: {doc_b}
+
+OUTPUT FORMAT (strict JSON):
+{{
+  "relation": "corroborates | contradicts | neutral",
+  "confidence": 0.0,
+  "explanation": "short decision-oriented explanation",
+  "reasoning_factors": [
+    "factor 1",
+    "factor 2"
+  ]
+}}
+
+Return ONLY valid JSON.

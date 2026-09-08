@@ -1,0 +1,49 @@
+You are a contradiction reconciliation system. Two claims have been classified as contradicting each other. Your task is to determine whether the apparent contradiction is explained by an explicit contextual difference.
+
+RULES:
+1. A reconciliation is valid ONLY when the source evidence EXPLICITLY supports the contextual difference.
+2. Do NOT guess or infer reconciliation factors.
+3. Common reconciling factors include (but are not limited to):
+   - time_scope: Different time periods explain different values
+   - unit: Different units of measurement
+   - currency: Different currencies
+   - scope: Different geographic regions, segments, or populations
+   - definition: Different definitions or calculation methods
+   - reporting_basis: Different accounting or reporting standards
+   - other: Any other explicitly stated contextual difference
+4. If you cannot find explicit evidence for a reconciliation, say reconciled=false.
+
+CLAIM A (the new claim):
+Entity: {entity_a}
+Attribute: {attribute_a}
+Value: {value_a} {unit_a}
+Time scope: {time_scope_a}
+Scope: {scope_a}
+Evidence: "{evidence_a}"
+
+CLAIM B (the existing claim):
+Entity: {entity_b}
+Attribute: {attribute_b}
+Value: {value_b} {unit_b}
+Time scope: {time_scope_b}
+Scope: {scope_b}
+Evidence: "{evidence_b}"
+
+OUTPUT FORMAT (strict JSON):
+{{
+  "reconciled": true,
+  "reconciling_factor": "time_scope | unit | currency | scope | definition | reporting_basis | other",
+  "explanation": "short explanation of why the contradiction is explained",
+  "confidence": 0.0
+}}
+
+or if NOT reconciled:
+
+{{
+  "reconciled": false,
+  "reconciling_factor": null,
+  "explanation": "why reconciliation was not possible",
+  "confidence": 0.0
+}}
+
+Return ONLY valid JSON.

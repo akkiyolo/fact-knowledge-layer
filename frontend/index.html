@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Fact Knowledge Layer — Generic PDF fact extraction, evidence grounding, and cross-document relation analysis">
+    <title>Fact Knowledge Layer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* ═══════════════════════════════════════════════════════════
+           DESIGN SYSTEM
+           ═══════════════════════════════════════════════════════════ */
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #111827;
+            --bg-card: rgba(17, 24, 39, 0.8);
+            --bg-card-hover: rgba(30, 41, 59, 0.9);
+            --bg-glass: rgba(255, 255, 255, 0.03);
+            --border: rgba(255, 255, 255, 0.08);
+            --border-active: rgba(99, 102, 241, 0.5);
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent: #6366f1;
+            --accent-light: #818cf8;
+            --accent-glow: rgba(99, 102, 241, 0.15);
+            --success: #10b981;
+            --success-bg: rgba(16, 185, 129, 0.12);
+            --warning: #f59e0b;
+            --warning-bg: rgba(245, 158, 11, 0.12);
+            --danger: #ef4444;
+            --danger-bg: rgba(239, 68, 68, 0.12);
+            --info: #06b6d4;
+            --info-bg: rgba(6, 182, 212, 0.12);
+            --corroborates: #10b981;
+            --contradicts: #ef4444;
+            --neutral: #64748b;
+            --reconciled: #f59e0b;
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+            --shadow-md: 0 4px 16px rgba(0,0,0,0.4);
+            --shadow-lg: 0 8px 32px rgba(0,0,0,0.5);
+            --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Background gradient */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background:
+                radial-gradient(ellipse 80% 60% at 10% 20%, rgba(99,102,241,0.08), transparent),
+                radial-gradient(ellipse 60% 40% at 90% 80%, rgba(16,185,129,0.05), transparent);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           LAYOUT
+           ═══════════════════════════════════════════════════════════ */
+        .app { position: relative; z-index: 1; }
+
+        header {
+            padding: 20px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border);
+            backdrop-filter: blur(12px);
+            background: rgba(10, 14, 26, 0.85);
+            position: sticky; top: 0; z-index: 100;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 36px; height: 36px;
+            background: linear-gradient(135deg, var(--accent), #a78bfa);
+            border-radius: var(--radius-sm);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px; font-weight: 800; color: white;
+        }
+
+        .logo h1 {
+            font-size: 18px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--text-primary), var(--accent-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .health-badge {
+            display: flex; align-items: center; gap: 6px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px; font-weight: 500;
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .health-badge:hover { border-color: var(--accent); }
+        .health-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            animation: pulse 2s ease-in-out infinite;
+        }
+        .health-dot.healthy { background: var(--success); }
+        .health-dot.unhealthy { background: var(--danger); }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        .main-content {
+            display: flex;
+            min-height: calc(100vh - 77px);
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           SIDEBAR
+           ═══════════════════════════════════════════════════════════ */
+        .sidebar {
+            width: 260px;
+            border-right: 1px solid var(--border);
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            background: rgba(10, 14, 26, 0.5);
+            flex-shrink: 0;
+        }
+
+        .nav-item {
+            padding: 10px 16px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            display: flex; align-items: center; gap: 10px;
+            font-size: 14px; font-weight: 500;
+            color: var(--text-secondary);
+            transition: var(--transition);
+            border: 1px solid transparent;
+        }
+        .nav-item:hover { background: var(--bg-glass); color: var(--text-primary); }
+        .nav-item.active {
+            background: var(--accent-glow);
+            color: var(--accent-light);
+            border-color: var(--border-active);
+        }
+        .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+        .nav-badge {
+            margin-left: auto;
+            background: var(--accent-glow);
+            color: var(--accent-light);
+            font-size: 11px; font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           CONTENT AREA
+           ═══════════════════════════════════════════════════════════ */
+        .content {
+            flex: 1;
+            padding: 24px 32px;
+            overflow-y: auto;
+            max-height: calc(100vh - 77px);
+        }
+
+        .page-header {
+            margin-bottom: 24px;
+        }
+        .page-header h2 {
+            font-size: 22px; font-weight: 700;
+            margin-bottom: 6px;
+        }
+        .page-header p {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           CARDS
+           ═══════════════════════════════════════════════════════════ */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            backdrop-filter: blur(8px);
+            transition: var(--transition);
+        }
+        .card:hover { border-color: rgba(255,255,255,0.12); }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 16px 20px;
+            transition: var(--transition);
+        }
+        .stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+        .stat-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+        .stat-value { font-size: 28px; font-weight: 700; }
+        .stat-value.accent { color: var(--accent-light); }
+
+        /* ═══════════════════════════════════════════════════════════
+           UPLOAD AREA
+           ═══════════════════════════════════════════════════════════ */
+        .upload-area {
+            border: 2px dashed var(--border);
+            border-radius: var(--radius-lg);
+            padding: 48px 32px;
+            text-align: center;
+            cursor: pointer;
+            transition: var(--transition);
+            margin-bottom: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+        .upload-area:hover, .upload-area.dragover {
+            border-color: var(--accent);
+            background: var(--accent-glow);
+        }
+        .upload-area.uploading { pointer-events: none; opacity: 0.7; }
+        .upload-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+        .upload-text { font-size: 16px; font-weight: 500; margin-bottom: 4px; }
+        .upload-hint { font-size: 13px; color: var(--text-muted); }
+        .upload-progress {
+            position: absolute; bottom: 0; left: 0;
+            height: 3px; background: var(--accent);
+            transition: width 0.3s;
+            border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+        }
+
+        #upload-input { display: none; }
+
+        /* ═══════════════════════════════════════════════════════════
+           TABLES / LISTS
+           ═══════════════════════════════════════════════════════════ */
+        .data-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+        .data-table th {
+            text-align: left;
+            padding: 10px 16px;
+            font-size: 11px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.5px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+        }
+        .data-table td {
+            padding: 12px 16px;
+            font-size: 14px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            vertical-align: top;
+        }
+        .data-table tr { cursor: pointer; transition: var(--transition); }
+        .data-table tbody tr:hover { background: var(--bg-glass); }
+
+        /* ═══════════════════════════════════════════════════════════
+           BADGES / PILLS
+           ═══════════════════════════════════════════════════════════ */
+        .badge {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 3px 10px; border-radius: 12px;
+            font-size: 11px; font-weight: 600; white-space: nowrap;
+        }
+        .badge-usable { background: var(--success-bg); color: var(--success); }
+        .badge-unresolved { background: var(--warning-bg); color: var(--warning); }
+        .badge-corroborates { background: var(--success-bg); color: var(--corroborates); }
+        .badge-contradicts { background: var(--danger-bg); color: var(--contradicts); }
+        .badge-neutral { background: rgba(100,116,139,0.15); color: var(--neutral); }
+        .badge-contradicts_reconciled { background: var(--warning-bg); color: var(--reconciled); }
+        .badge-processing { background: var(--info-bg); color: var(--info); }
+        .badge-completed { background: var(--success-bg); color: var(--success); }
+        .badge-failed { background: var(--danger-bg); color: var(--danger); }
+        .badge-duplicate { background: rgba(100,116,139,0.15); color: var(--text-muted); }
+
+        /* ═══════════════════════════════════════════════════════════
+           CONFIDENCE BAR
+           ═══════════════════════════════════════════════════════════ */
+        .confidence-bar {
+            width: 60px; height: 6px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 3px;
+            overflow: hidden;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 6px;
+        }
+        .confidence-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+        .confidence-fill.high { background: var(--success); }
+        .confidence-fill.medium { background: var(--warning); }
+        .confidence-fill.low { background: var(--danger); }
+
+        /* ═══════════════════════════════════════════════════════════
+           DETAIL VIEW
+           ═══════════════════════════════════════════════════════════ */
+        .detail-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        @media (max-width: 900px) { .detail-grid { grid-template-columns: 1fr; } }
+
+        .detail-item { margin-bottom: 14px; }
+        .detail-label {
+            font-size: 11px; font-weight: 600;
+            color: var(--text-muted); text-transform: uppercase;
+            letter-spacing: 0.5px; margin-bottom: 4px;
+        }
+        .detail-value { font-size: 14px; color: var(--text-primary); word-break: break-word; }
+
+        .evidence-block {
+            background: rgba(99, 102, 241, 0.06);
+            border-left: 3px solid var(--accent);
+            padding: 12px 16px;
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            margin: 8px 0;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .back-btn {
+            background: none; border: 1px solid var(--border);
+            color: var(--text-secondary);
+            padding: 6px 14px; border-radius: var(--radius-sm);
+            cursor: pointer; font-size: 13px; font-weight: 500;
+            transition: var(--transition);
+            margin-bottom: 16px;
+        }
+        .back-btn:hover { border-color: var(--accent); color: var(--text-primary); }
+
+        /* ═══════════════════════════════════════════════════════════
+           RELATION SIDE-BY-SIDE
+           ═══════════════════════════════════════════════════════════ */
+        .relation-compare {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 16px;
+            align-items: start;
+        }
+        .relation-arrow {
+            display: flex; align-items: center; justify-content: center;
+            padding-top: 40px; font-size: 24px; color: var(--text-muted);
+        }
+        .claim-side {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 16px;
+        }
+        .claim-side-header {
+            font-size: 11px; font-weight: 600;
+            color: var(--text-muted); text-transform: uppercase;
+            margin-bottom: 12px; letter-spacing: 0.5px;
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           FILTERS
+           ═══════════════════════════════════════════════════════════ */
+        .filters {
+            display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;
+        }
+        .filter-btn {
+            padding: 6px 14px; border-radius: 20px;
+            font-size: 12px; font-weight: 500;
+            border: 1px solid var(--border);
+            background: transparent; color: var(--text-secondary);
+            cursor: pointer; transition: var(--transition);
+        }
+        .filter-btn:hover { border-color: var(--accent); color: var(--text-primary); }
+        .filter-btn.active {
+            background: var(--accent-glow);
+            border-color: var(--border-active);
+            color: var(--accent-light);
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           LOADING / EMPTY / ERROR STATES
+           ═══════════════════════════════════════════════════════════ */
+        .loading {
+            display: flex; align-items: center; justify-content: center;
+            padding: 48px; color: var(--text-muted); font-size: 14px;
+        }
+        .spinner {
+            width: 24px; height: 24px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 10px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .empty-state {
+            text-align: center; padding: 48px 24px;
+            color: var(--text-muted);
+        }
+        .empty-state .empty-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.3; }
+        .empty-state h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary); }
+        .empty-state p { font-size: 13px; }
+
+        .error-toast {
+            position: fixed; bottom: 24px; right: 24px;
+            background: var(--danger-bg); border: 1px solid rgba(239,68,68,0.3);
+            color: var(--danger); padding: 12px 20px;
+            border-radius: var(--radius-md);
+            font-size: 13px; font-weight: 500;
+            z-index: 1000; max-width: 400px;
+            box-shadow: var(--shadow-lg);
+            animation: slideIn 0.3s ease;
+        }
+        .success-toast {
+            position: fixed; bottom: 24px; right: 24px;
+            background: var(--success-bg); border: 1px solid rgba(16,185,129,0.3);
+            color: var(--success); padding: 12px 20px;
+            border-radius: var(--radius-md);
+            font-size: 13px; font-weight: 500;
+            z-index: 1000; max-width: 400px;
+            box-shadow: var(--shadow-lg);
+            animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        /* ═══════════════════════════════════════════════════════════
+           SCROLLBAR
+           ═══════════════════════════════════════════════════════════ */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+        .truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px; }
+        .mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- ═══ HEADER ═══ -->
+        <header>
+            <div class="logo">
+                <div class="logo-icon">F</div>
+                <h1>Fact Knowledge Layer</h1>
+            </div>
+            <div class="health-badge" id="health-badge" onclick="checkHealth()">
+                <div class="health-dot" id="health-dot"></div>
+                <span id="health-text">Checking...</span>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <!-- ═══ SIDEBAR ═══ -->
+            <nav class="sidebar">
+                <div class="nav-item active" data-view="upload" onclick="switchView('upload')">
+                    <span class="nav-icon">📤</span> Upload
+                </div>
+                <div class="nav-item" data-view="documents" onclick="switchView('documents')">
+                    <span class="nav-icon">📄</span> Documents
+                    <span class="nav-badge" id="doc-count">0</span>
+                </div>
+                <div class="nav-item" data-view="claims" onclick="switchView('claims')">
+                    <span class="nav-icon">💎</span> Claims
+                    <span class="nav-badge" id="claim-count">0</span>
+                </div>
+                <div class="nav-item" data-view="relations" onclick="switchView('relations')">
+                    <span class="nav-icon">🔗</span> Relations
+                    <span class="nav-badge" id="rel-count">0</span>
+                </div>
+                <div class="nav-item" data-view="unresolved" onclick="switchView('unresolved')">
+                    <span class="nav-icon">⚠️</span> Unresolved
+                    <span class="nav-badge" id="unresolved-count">0</span>
+                </div>
+            </nav>
+
+            <!-- ═══ CONTENT ═══ -->
+            <main class="content" id="content">
+                <!-- Dynamic content rendered here -->
+            </main>
+        </div>
+    </div>
+
+    <script>
+    /* ═══════════════════════════════════════════════════════════
+       STATE
+       ═══════════════════════════════════════════════════════════ */
+    const API = '';
+    let currentView = 'upload';
+    let cachedData = { documents: [], claims: [], relations: [], unresolved: [] };
+
+    /* ═══════════════════════════════════════════════════════════
+       API HELPERS
+       ═══════════════════════════════════════════════════════════ */
+    async function apiFetch(url) {
+        try {
+            const res = await fetch(API + url);
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || `HTTP ${res.status}`);
+            }
+            return await res.json();
+        } catch (e) {
+            if (e.message.includes('Failed to fetch')) {
+                showError('Cannot connect to server');
+            }
+            throw e;
+        }
+    }
+
+    function showError(msg) {
+        const toast = document.createElement('div');
+        toast.className = 'error-toast';
+        toast.textContent = msg;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 5000);
+    }
+
+    function showSuccess(msg) {
+        const toast = document.createElement('div');
+        toast.className = 'success-toast';
+        toast.textContent = msg;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 4000);
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       HEALTH CHECK
+       ═══════════════════════════════════════════════════════════ */
+    async function checkHealth() {
+        const dot = document.getElementById('health-dot');
+        const text = document.getElementById('health-text');
+        try {
+            const data = await apiFetch('/api/health');
+            dot.className = 'health-dot ' + (data.status === 'healthy' ? 'healthy' : 'unhealthy');
+            text.textContent = data.status === 'healthy'
+                ? `DB ✓ | ${data.ollama === 'connected' ? 'LLM ✓' : 'LLM ✗'}`
+                : 'Unhealthy';
+        } catch {
+            dot.className = 'health-dot unhealthy';
+            text.textContent = 'Offline';
+        }
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       NAVIGATION
+       ═══════════════════════════════════════════════════════════ */
+    function switchView(view) {
+        currentView = view;
+        document.querySelectorAll('.nav-item').forEach(n => {
+            n.classList.toggle('active', n.dataset.view === view);
+        });
+        renderView(view);
+    }
+
+    function renderView(view) {
+        const content = document.getElementById('content');
+        switch (view) {
+            case 'upload': renderUpload(content); break;
+            case 'documents': renderDocuments(content); break;
+            case 'claims': renderClaims(content); break;
+            case 'relations': renderRelations(content); break;
+            case 'unresolved': renderUnresolved(content); break;
+            default: renderUpload(content);
+        }
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       UPLOAD VIEW
+       ═══════════════════════════════════════════════════════════ */
+    function renderUpload(el) {
+        el.innerHTML = `
+            <div class="page-header">
+                <h2>Upload PDF</h2>
+                <p>Upload any PDF document for fact extraction and analysis</p>
+            </div>
+            <div class="upload-area" id="upload-area"
+                 ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)"
+                 ondrop="handleDrop(event)" onclick="document.getElementById('upload-input').click()">
+                <div class="upload-icon">📁</div>
+                <div class="upload-text">Drop a PDF here or click to browse</div>
+                <div class="upload-hint">Maximum 50 MB • PDF files only</div>
+                <div class="upload-progress" id="upload-progress" style="width: 0%"></div>
+            </div>
+            <input type="file" id="upload-input" accept=".pdf" onchange="handleFileSelect(event)">
+            <div id="upload-status"></div>
+        `;
+    }
+
+    function handleDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('dragover'); }
+    function handleDragLeave(e) { e.currentTarget.classList.remove('dragover'); }
+
+    function handleDrop(e) {
+        e.preventDefault();
+        e.currentTarget.classList.remove('dragover');
+        const files = e.dataTransfer.files;
+        if (files.length > 0) uploadFile(files[0]);
+    }
+
+    function handleFileSelect(e) {
+        const files = e.target.files;
+        if (files.length > 0) uploadFile(files[0]);
+    }
+
+    async function uploadFile(file) {
+        if (!file.name.toLowerCase().endsWith('.pdf')) {
+            showError('Only PDF files are accepted');
+            return;
+        }
+
+        const area = document.getElementById('upload-area');
+        const status = document.getElementById('upload-status');
+        area.classList.add('uploading');
+
+        status.innerHTML = `<div class="loading"><div class="spinner"></div>Uploading and processing ${escapeHtml(file.name)}...</div>`;
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const res = await fetch(API + '/api/documents/upload', { method: 'POST', body: formData });
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.detail || 'Upload failed');
+            }
+
+            if (data.is_duplicate) {
+                status.innerHTML = `<div class="card" style="border-color: var(--warning); margin-top: 16px;">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                        <span class="badge badge-duplicate">Duplicate</span>
+                        <strong>${escapeHtml(data.filename)}</strong>
+                    </div>
+                    <p style="color:var(--text-secondary);font-size:13px;">${escapeHtml(data.message)}</p>
+                </div>`;
+            } else {
+                showSuccess(`${file.name} uploaded — processing started`);
+                status.innerHTML = `<div class="card" style="border-color: var(--success); margin-top: 16px;">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                        <span class="badge badge-processing">Processing</span>
+                        <strong>${escapeHtml(data.filename)}</strong>
+                    </div>
+                    <p style="color:var(--text-secondary);font-size:13px;">${escapeHtml(data.message)}</p>
+                </div>`;
+            }
+
+            refreshCounts();
+        } catch (e) {
+            showError('Upload failed: ' + e.message);
+            status.innerHTML = '';
+        } finally {
+            area.classList.remove('uploading');
+        }
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       DOCUMENTS VIEW
+       ═══════════════════════════════════════════════════════════ */
+    async function renderDocuments(el) {
+        el.innerHTML = `<div class="page-header"><h2>Documents</h2><p>All ingested PDF documents</p></div>
+            <div class="loading"><div class="spinner"></div>Loading documents...</div>`;
+        try {
+            const data = await apiFetch('/api/documents');
+            cachedData.documents = data.documents || [];
+            if (!cachedData.documents.length) {
+                el.innerHTML = `<div class="page-header"><h2>Documents</h2><p>All ingested PDF documents</p></div>
+                    <div class="empty-state"><div class="empty-icon">📄</div><h3>No documents yet</h3><p>Upload a PDF to get started</p></div>`;
+                return;
+            }
+            let rows = cachedData.documents.map(d => `
+                <tr onclick="viewDocumentClaims('${d.id}')">
+                    <td><strong>${escapeHtml(d.filename)}</strong></td>
+                    <td><span class="badge badge-${d.status}">${d.status}</span></td>
+                    <td>${d.page_count || '—'}</td>
+                    <td class="mono" title="${d.id}">${d.id.slice(0, 8)}…</td>
+                    <td>${new Date(d.created_at).toLocaleString()}</td>
+                </tr>`).join('');
+
+            el.innerHTML = `<div class="page-header"><h2>Documents</h2><p>${cachedData.documents.length} documents ingested</p></div>
+                <div class="card"><table class="data-table">
+                <thead><tr><th>Filename</th><th>Status</th><th>Pages</th><th>ID</th><th>Created</th></tr></thead>
+                <tbody>${rows}</tbody></table></div>`;
+        } catch (e) { el.innerHTML = `<div class="empty-state"><h3>Error loading documents</h3><p>${escapeHtml(e.message)}</p></div>`; }
+    }
+
+    async function viewDocumentClaims(docId) {
+        currentView = 'doc-claims';
+        const el = document.getElementById('content');
+        el.innerHTML = `<div class="loading"><div class="spinner"></div>Loading claims...</div>`;
+        try {
+            const data = await apiFetch(`/api/documents/${docId}/claims`);
+            const doc = cachedData.documents.find(d => d.id === docId);
+            const fname = doc ? doc.filename : docId;
+            renderClaimsList(el, data.claims || [], `Claims from ${fname}`, true);
+        } catch (e) { el.innerHTML = `<div class="empty-state"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`; }
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       CLAIMS VIEW
+       ═══════════════════════════════════════════════════════════ */
+    async function renderClaims(el) {
+        el.innerHTML = `<div class="page-header"><h2>All Claims</h2><p>Extracted atomic facts across all documents</p></div>
+            <div class="loading"><div class="spinner"></div>Loading claims...</div>`;
+        try {
+            const data = await apiFetch('/api/claims');
+            cachedData.claims = data.claims || [];
+            renderClaimsList(el, cachedData.claims, 'All Claims', false);
+        } catch (e) { el.innerHTML = `<div class="empty-state"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`; }
+    }
+
+    function renderClaimsList(el, claims, title, showBack) {
+        if (!claims.length) {
+            el.innerHTML = `${showBack ? '<button class="back-btn" onclick="switchView(\'documents\')">← Back</button>' : ''}
+                <div class="page-header"><h2>${escapeHtml(title)}</h2></div>
+                <div class="empty-state"><div class="empty-icon">💎</div><h3>No claims found</h3><p>Process a document to extract claims</p></div>`;
+            return;
+        }
+
+        // Filter buttons
+        const statuses = [...new Set(claims.map(c => c.status))];
+        let filterHtml = `<div class="filters">
+            <button class="filter-btn active" onclick="filterClaims(this, 'all')">All (${claims.length})</button>`;
+        statuses.forEach(s => {
+            const count = claims.filter(c => c.status === s).length;
+            filterHtml += `<button class="filter-btn" onclick="filterClaims(this, '${s}')">${s} (${count})</button>`;
+        });
+        filterHtml += `</div>`;
+
+        let rows = claims.map(c => `
+            <tr onclick="viewClaimDetail('${c.id}')" data-status="${c.status}">
+                <td><strong class="truncate" style="display:block">${escapeHtml(c.entity_text)}</strong>
+                    <span style="font-size:11px;color:var(--text-muted)">${escapeHtml(c.entity_type || '')}</span></td>
+                <td>${escapeHtml(c.attribute_canonical || c.attribute_raw)}</td>
+                <td class="mono">${escapeHtml(String(c.value || '—'))} ${escapeHtml(c.unit || '')}</td>
+                <td>${renderConfidence(c.extraction_confidence)}</td>
+                <td>${renderConfidence(c.grounding_confidence)}</td>
+                <td><span class="badge badge-${c.status}">${c.status}</span></td>
+                <td>p.${c.evidence_page || '?'}</td>
+            </tr>`).join('');
+
+        el.innerHTML = `${showBack ? '<button class="back-btn" onclick="switchView(\'documents\')">← Back</button>' : ''}
+            <div class="page-header"><h2>${escapeHtml(title)}</h2><p>${claims.length} claims</p></div>
+            ${filterHtml}
+            <div class="card"><table class="data-table" id="claims-table">
+            <thead><tr><th>Entity</th><th>Attribute</th><th>Value</th><th>Extraction</th><th>Grounding</th><th>Status</th><th>Page</th></tr></thead>
+            <tbody>${rows}</tbody></table></div>`;
+    }
+
+    function filterClaims(btn, status) {
+        document.querySelectorAll('.filters .filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.querySelectorAll('#claims-table tbody tr').forEach(tr => {
+            tr.style.display = (status === 'all' || tr.dataset.status === status) ? '' : 'none';
+        });
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       CLAIM DETAIL
+       ═══════════════════════════════════════════════════════════ */
+    async function viewClaimDetail(claimId) {
+        const el = document.getElementById('content');
+        el.innerHTML = `<div class="loading"><div class="spinner"></div>Loading claim...</div>`;
+        try {
+            const [claim, relData] = await Promise.all([
+                apiFetch(`/api/claims/${claimId}`),
+                apiFetch(`/api/claims/${claimId}/relations`)
+            ]);
+            const rels = relData.relations || [];
+
+            const tsText = claim.time_scope ? (claim.time_scope.text || `${claim.time_scope.start || '?'} — ${claim.time_scope.end || '?'}`) : '—';
+
+            let relsHtml = '';
+            if (rels.length) {
+                relsHtml = `<h3 style="margin: 24px 0 12px; font-size: 16px;">Relations (${rels.length})</h3>`;
+                rels.forEach(r => {
+                    const other = r.source_claim_id === claimId ? r.target_claim : r.source_claim;
+                    const otherLabel = other ? `${other.entity_text} → ${other.attribute_canonical || other.attribute_raw} = ${other.value || '?'}` : r.target_claim_id.slice(0, 8);
+                    relsHtml += `<div class="card" style="margin-bottom:12px; cursor:pointer" onclick="viewRelationDetail('${r.id}', '${JSON.stringify(r).replace(/'/g, "\\'")}')">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                            <span class="badge badge-${r.relation_type}">${r.relation_type}</span>
+                            ${renderConfidence(r.confidence)}
+                        </div>
+                        <div style="font-size:13px;color:var(--text-secondary);margin-bottom:6px;">${escapeHtml(otherLabel)}</div>
+                        <div style="font-size:12px;color:var(--text-muted);">${escapeHtml(r.explanation || '')}</div>
+                        ${r.reconciling_factor ? `<div style="margin-top:6px;font-size:11px;"><span class="badge badge-contradicts_reconciled">Reconciled: ${escapeHtml(r.reconciling_factor)}</span></div>` : ''}
+                    </div>`;
+                });
+            }
+
+            el.innerHTML = `
+                <button class="back-btn" onclick="switchView('claims')">← Back to claims</button>
+                <div class="page-header"><h2>${escapeHtml(claim.entity_text)}</h2>
+                    <p>${escapeHtml(claim.attribute_canonical || claim.attribute_raw)} = ${escapeHtml(String(claim.value || '—'))} ${escapeHtml(claim.unit || '')}</p>
+                </div>
+                <div class="detail-grid">
+                    <div class="card">
+                        <div class="detail-item"><div class="detail-label">Entity</div><div class="detail-value">${escapeHtml(claim.entity_text)} <span class="badge" style="background:var(--accent-glow);color:var(--accent-light)">${escapeHtml(claim.entity_type || 'unknown')}</span></div></div>
+                        <div class="detail-item"><div class="detail-label">Raw Attribute</div><div class="detail-value">${escapeHtml(claim.attribute_raw)}</div></div>
+                        <div class="detail-item"><div class="detail-label">Canonical Attribute</div><div class="detail-value">${escapeHtml(claim.attribute_canonical || '—')}</div></div>
+                        <div class="detail-item"><div class="detail-label">Value</div><div class="detail-value mono">${escapeHtml(String(claim.value || '—'))} ${escapeHtml(claim.unit || '')}</div></div>
+                        <div class="detail-item"><div class="detail-label">Value Type</div><div class="detail-value">${escapeHtml(claim.value_type || '—')}</div></div>
+                        <div class="detail-item"><div class="detail-label">Time Scope</div><div class="detail-value">${escapeHtml(tsText)}</div></div>
+                        <div class="detail-item"><div class="detail-label">Scope</div><div class="detail-value">${escapeHtml(claim.scope || '—')}</div></div>
+                        <div class="detail-item"><div class="detail-label">Qualifiers</div><div class="detail-value">${(claim.qualifiers || []).map(q => `<span class="badge" style="background:var(--bg-glass);color:var(--text-secondary);margin:2px;">${escapeHtml(q)}</span>`).join(' ') || '—'}</div></div>
+                    </div>
+                    <div class="card">
+                        <div class="detail-item"><div class="detail-label">Status</div><div class="detail-value"><span class="badge badge-${claim.status}">${claim.status}</span></div></div>
+                        <div class="detail-item"><div class="detail-label">Extraction Confidence</div><div class="detail-value">${renderConfidence(claim.extraction_confidence)} ${((claim.extraction_confidence || 0) * 100).toFixed(0)}%</div></div>
+                        <div class="detail-item"><div class="detail-label">Grounding Confidence</div><div class="detail-value">${renderConfidence(claim.grounding_confidence)} ${((claim.grounding_confidence || 0) * 100).toFixed(0)}%</div></div>
+                        <div class="detail-item"><div class="detail-label">Page</div><div class="detail-value">${claim.evidence_page || '—'}</div></div>
+                        <div class="detail-item"><div class="detail-label">Char Offsets</div><div class="detail-value mono">${claim.evidence_char_start ?? '—'} — ${claim.evidence_char_end ?? '—'}</div></div>
+                        <div class="detail-item"><div class="detail-label">Document</div><div class="detail-value">${escapeHtml(claim.document_filename || claim.document_id)}</div></div>
+                        <div class="detail-item"><div class="detail-label">Evidence</div>
+                            <div class="evidence-block">${escapeHtml(claim.evidence_text || 'No evidence')}</div>
+                        </div>
+                    </div>
+                </div>
+                ${relsHtml}`;
+        } catch (e) { el.innerHTML = `<div class="empty-state"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`; }
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       RELATIONS VIEW
+       ═══════════════════════════════════════════════════════════ */
+    async function renderRelations(el) {
+        el.innerHTML = `<div class="page-header"><h2>Relations</h2><p>Cross-document claim relationships</p></div>
+            <div class="loading"><div class="spinner"></div>Loading relations...</div>`;
+        try {
+            const data = await apiFetch('/api/relations');
+            cachedData.relations = data.relations || [];
+            if (!cachedData.relations.length) {
+                el.innerHTML = `<div class="page-header"><h2>Relations</h2><p>Cross-document claim relationships</p></div>
+                    <div class="empty-state"><div class="empty-icon">🔗</div><h3>No relations yet</h3><p>Process multiple documents to see cross-document relationships</p></div>`;
+                return;
+            }
+
+            const types = [...new Set(cachedData.relations.map(r => r.relation_type))];
+            let filterHtml = `<div class="filters">
+                <button class="filter-btn active" onclick="filterRelations(this, 'all')">All (${cachedData.relations.length})</button>`;
+            types.forEach(t => {
+                const count = cachedData.relations.filter(r => r.relation_type === t).length;
+                filterHtml += `<button class="filter-btn" onclick="filterRelations(this, '${t}')"><span class="badge badge-${t}" style="margin-right:4px">${t}</span> (${count})</button>`;
+            });
+            filterHtml += `</div>`;
+
+            let cards = cachedData.relations.map(r => {
+                const sc = r.source_claim;
+                const tc = r.target_claim;
+                return `<div class="card" style="margin-bottom:16px;" data-reltype="${r.relation_type}">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+                        <span class="badge badge-${r.relation_type}">${r.relation_type}</span>
+                        ${renderConfidence(r.confidence)}
+                        ${r.reconciling_factor ? `<span class="badge badge-contradicts_reconciled">↻ ${escapeHtml(r.reconciling_factor)}</span>` : ''}
+                    </div>
+                    <div class="relation-compare">
+                        <div class="claim-side">
+                            <div class="claim-side-header">Source Claim (New)</div>
+                            ${sc ? renderMiniClaim(sc) : '<em>N/A</em>'}
+                        </div>
+                        <div class="relation-arrow">⟷</div>
+                        <div class="claim-side">
+                            <div class="claim-side-header">Target Claim (Existing)</div>
+                            ${tc ? renderMiniClaim(tc) : '<em>N/A</em>'}
+                        </div>
+                    </div>
+                    <div style="margin-top:12px;font-size:13px;color:var(--text-secondary);">
+                        <strong>Explanation:</strong> ${escapeHtml(r.explanation || '—')}
+                    </div>
+                    ${r.reconciliation_explanation ? `<div style="margin-top:6px;font-size:12px;color:var(--reconciled);">↻ ${escapeHtml(r.reconciliation_explanation)}</div>` : ''}
+                </div>`;
+            }).join('');
+
+            el.innerHTML = `<div class="page-header"><h2>Relations</h2><p>${cachedData.relations.length} cross-document relationships</p></div>
+                ${filterHtml}<div id="relations-list">${cards}</div>`;
+        } catch (e) { el.innerHTML = `<div class="empty-state"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`; }
+    }
+
+    function filterRelations(btn, type) {
+        document.querySelectorAll('.filters .filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.querySelectorAll('#relations-list .card').forEach(card => {
+            card.style.display = (type === 'all' || card.dataset.reltype === type) ? '' : 'none';
+        });
+    }
+
+    function renderMiniClaim(c) {
+        if (!c) return '<em>N/A</em>';
+        return `
+            <div class="detail-item"><div class="detail-label">Entity</div><div class="detail-value">${escapeHtml(c.entity_text)}</div></div>
+            <div class="detail-item"><div class="detail-label">Attribute</div><div class="detail-value">${escapeHtml(c.attribute_canonical || c.attribute_raw)}</div></div>
+            <div class="detail-item"><div class="detail-label">Value</div><div class="detail-value mono">${escapeHtml(String(c.value || '—'))} ${escapeHtml(c.unit || '')}</div></div>
+            <div class="detail-item"><div class="detail-label">Time</div><div class="detail-value">${escapeHtml(c.time_scope?.text || '—')}</div></div>
+            <div class="detail-item"><div class="detail-label">Document</div><div class="detail-value" style="font-size:11px">${escapeHtml(c.document_filename || '—')}</div></div>
+            <div class="evidence-block" style="font-size:11px;max-height:100px">${escapeHtml(c.evidence_text || 'No evidence')}</div>`;
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       UNRESOLVED VIEW
+       ═══════════════════════════════════════════════════════════ */
+    async function renderUnresolved(el) {
+        el.innerHTML = `<div class="page-header"><h2>Unresolved Claims</h2><p>Claims that failed grounding or have low confidence</p></div>
+            <div class="loading"><div class="spinner"></div>Loading...</div>`;
+        try {
+            const data = await apiFetch('/api/claims?status=unresolved');
+            cachedData.unresolved = data.claims || [];
+            if (!cachedData.unresolved.length) {
+                el.innerHTML = `<div class="page-header"><h2>Unresolved Claims</h2></div>
+                    <div class="empty-state"><div class="empty-icon">✅</div><h3>All clear</h3><p>No unresolved claims</p></div>`;
+                return;
+            }
+            renderClaimsList(el, cachedData.unresolved, 'Unresolved Claims', false);
+        } catch (e) { el.innerHTML = `<div class="empty-state"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`; }
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       HELPERS
+       ═══════════════════════════════════════════════════════════ */
+    function renderConfidence(val) {
+        if (val == null || val === undefined) return '<span style="color:var(--text-muted)">—</span>';
+        const pct = (val * 100).toFixed(0);
+        const cls = val >= 0.8 ? 'high' : val >= 0.5 ? 'medium' : 'low';
+        return `<span class="confidence-bar"><span class="confidence-fill ${cls}" style="width:${pct}%"></span></span><span style="font-size:12px;color:var(--text-secondary)">${pct}%</span>`;
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       REFRESH COUNTS
+       ═══════════════════════════════════════════════════════════ */
+    async function refreshCounts() {
+        try {
+            const [docs, claims, rels, unresolved] = await Promise.all([
+                apiFetch('/api/documents').catch(() => ({ documents: [] })),
+                apiFetch('/api/claims').catch(() => ({ claims: [] })),
+                apiFetch('/api/relations').catch(() => ({ relations: [] })),
+                apiFetch('/api/claims?status=unresolved').catch(() => ({ claims: [] })),
+            ]);
+            document.getElementById('doc-count').textContent = docs.documents?.length || 0;
+            document.getElementById('claim-count').textContent = claims.claims?.length || 0;
+            document.getElementById('rel-count').textContent = rels.relations?.length || 0;
+            document.getElementById('unresolved-count').textContent = unresolved.claims?.length || 0;
+        } catch {}
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       INIT
+       ═══════════════════════════════════════════════════════════ */
+    document.addEventListener('DOMContentLoaded', () => {
+        checkHealth();
+        refreshCounts();
+        renderUpload(document.getElementById('content'));
+        // Auto-refresh every 15 seconds
+        setInterval(() => { refreshCounts(); checkHealth(); }, 15000);
+    });
+    </script>
+</body>
+</html>
