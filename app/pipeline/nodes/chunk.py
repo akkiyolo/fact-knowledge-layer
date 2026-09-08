@@ -62,9 +62,10 @@ def create_chunks(state: PipelineState) -> PipelineState:
             chunks.append(chunk)
 
     # DEMO FAST PATH: limit chunks for quick demonstration without hitting rate limits
-    if len(chunks) > 2:
-        mid = len(chunks) // 2
-        chunks = chunks[mid:mid+2]
+    if len(chunks) > 1:
+        # Sort by text length descending and pick the longest chunk to guarantee facts
+        chunks.sort(key=lambda c: len(c.text), reverse=True)
+        chunks = [chunks[0]]
 
     logger.info("Created %d chunks from %d pages", len(chunks), len(pages))
 
