@@ -84,7 +84,7 @@ Or upload any new PDF directly through the browser UI dropzone at `http://localh
 ---
 
 ## Video Demo
-*Demo Video Link:* [Video link to be inserted here]
+*Demo Video Link:* [https://www.youtube.com/watch?v=B7apj3Cb674]
 
 The demonstration covers:
 1. Drag-and-drop ingestion of a multi-page PDF into the automated extraction pipeline.
