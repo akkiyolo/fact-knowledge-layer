@@ -175,8 +175,8 @@ class GoogleLLMService(LLMService):
         import google.generativeai as genai
         genai.configure(api_key=settings.google_api_key)
         
-        # FORCE gemini-1.5-flash to bypass the 20-request/day limit of 2.5-flash
-        self.model_name = "gemini-1.5-flash"
+        # FORCE gemini-3.5-flash to bypass the 20-request/day limit of 2.5-flash, and 1.5-flash which threw a 404
+        self.model_name = "gemini-3.5-flash"
         
         # Verify basic initialization
         try:
